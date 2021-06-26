@@ -4,6 +4,8 @@
     "project": "./tsconfig.json"
   },
   "rules": {
+    "import/prefer-default-export": "off",
+    "react/require-default-props": "off",
     "react/jsx-filename-extension": [
       2,
       { "extensions": [".js", ".jsx", ".ts", ".tsx"] }
