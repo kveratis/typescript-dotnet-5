@@ -2,14 +2,33 @@
 import { css } from '@emotion/react';
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { gray3, gray6 } from './Styles';
+import { useForm } from 'react-hook-form';
+import {
+  gray3,
+  gray6,
+  Fieldset,
+  FieldContainer,
+  FieldLabel,
+  FieldTextArea,
+  FormButtonContainer,
+  PrimaryButton,
+  FieldError,
+  SubmissionSuccess,
+} from './Styles';
 import AnswerList from './AnswerList';
 import Page from './Page';
-import { QuestionData, getQuestion } from './QuestionsData';
+import { QuestionData, getQuestion, postAnswer } from './QuestionsData';
+
+type FormData = {
+  content: string;
+};
 
 const QuestionPage = () => {
   const [question, setQuestion] = useState<QuestionData | null>(null);
+  const [successfullySubmitted, setSuccessfullySubmitted] = useState(false);
+
   const { questionId } = useParams();
+
   useEffect(() => {
     const doGetQuestion = async (questionId: number) => {
       const foundQuestion = await getQuestion(questionId);
@@ -19,6 +38,24 @@ const QuestionPage = () => {
       doGetQuestion(Number(questionId));
     }
   }, [questionId]);
+
+  const {
+    register,
+    handleSubmit,
+    formState,
+    formState: { errors },
+  } = useForm<FormData>({ mode: 'onBlur' });
+
+  const submitForm = async (data: FormData) => {
+    const result = await postAnswer({
+      questionId: question!.questionId,
+      content: data.content,
+      userName: 'Fred',
+      created: new Date(),
+    });
+    setSuccessfullySubmitted(!!result);
+  };
+
   return (
     <Page>
       <div
@@ -61,6 +98,42 @@ const QuestionPage = () => {
               } on ${question.created.toLocaleDateString()} ${question.created.toLocaleTimeString()}`}
             </div>
             <AnswerList data={question.answers} />
+            <form
+              onSubmit={handleSubmit(submitForm)}
+              css={css`
+                margin-top: 20px;
+              `}
+            >
+              <Fieldset
+                disabled={formState.isSubmitting || successfullySubmitted}
+              >
+                <FieldContainer>
+                  <FieldLabel htmlFor="content">Your Answer</FieldLabel>
+                  <FieldTextArea
+                    id="content"
+                    {...register('content', { required: true, minLength: 50 })}
+                  />
+                  {errors.content && errors.content.type === 'required' && (
+                    <FieldError>You must enter the answer</FieldError>
+                  )}
+                  {errors.content && errors.content.type === 'minLength' && (
+                    <FieldError>
+                      The answer must be at least 50 characters
+                    </FieldError>
+                  )}
+                </FieldContainer>
+                <FormButtonContainer>
+                  <PrimaryButton type="submit">
+                    Submit Your Answer
+                  </PrimaryButton>
+                </FormButtonContainer>
+                {successfullySubmitted && (
+                  <SubmissionSuccess>
+                    Your answer was successfully submitted
+                  </SubmissionSuccess>
+                )}
+              </Fieldset>
+            </form>
           </>
         )}
       </div>
