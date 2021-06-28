@@ -13,6 +13,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DbUp;
 using System.Reflection;
+using QandA.Data;
 
 namespace QandA
 {
@@ -40,6 +41,8 @@ namespace QandA
             {
                 upgrader.PerformUpgrade();
             }
+
+            services.AddScoped<IDataRepository, DataRepository>();
 
             services.AddControllers();
             services.AddSwaggerGen(c =>

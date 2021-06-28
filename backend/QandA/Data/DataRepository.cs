@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Data.SqlClient;
 using Dapper;
-using QandA.Models;
+using QandA.Data.Models;
 
 namespace QandA.Data
 {
@@ -65,14 +65,14 @@ namespace QandA.Data
             return connection.Query<QuestionGetManyResponse>(@"EXEC dbo.Question_GetUnanswered");
         }
 
-        public AnswerGetResponse PostAnswer(AnswerPostRequest answer)
+        public AnswerGetResponse PostAnswer(AnswerPostFullRequest answer)
         {
             using var connection = new SqlConnection(_connectionString);
             connection.Open();
             return connection.QueryFirst<AnswerGetResponse>(@"EXEC dbo.Answer_Post @QuestionId = @QuestionId, @Content=@Content, @UserId=@UserId, @UserName=@UserName, @Created=@Created", answer);
         }
 
-        public QuestionGetSingleResponse PostQuestion(QuestionPostRequest question)
+        public QuestionGetSingleResponse PostQuestion(QuestionPostFullRequest question)
         {
             using var connection = new SqlConnection(_connectionString);
             connection.Open();
