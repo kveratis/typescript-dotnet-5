@@ -1,22 +1,33 @@
 /** @jsxImportSource @emotion/react */
 import { css } from '@emotion/react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router';
+import { useSelector, useDispatch } from 'react-redux';
+import {
+  gettingUnansweredQuestionsAction,
+  gotUnansweredQuestionsAction,
+  AppState,
+} from './Store';
 import Page from './Page';
 import PageTitle from './PageTitle';
 import QuestionList from './QuestionList';
-import { QuestionData, getUnansweredQuestions } from './QuestionsData';
+import { getUnansweredQuestions } from './QuestionsData';
 import { PrimaryButton } from './Styles';
 
 const HomePage = () => {
-  const [questions, setQuestions] = useState<QuestionData[]>([]);
-  const [questionsLoading, setQuestionsLoading] = useState(true);
+  const dispatch = useDispatch();
+  const questions = useSelector(
+    (state: AppState) => state.questions.unanswered,
+  );
+  const questionsLoading = useSelector(
+    (state: AppState) => state.questions.loading,
+  );
 
   useEffect(() => {
     const doGetUnansweredQuestions = async () => {
+      dispatch(gettingUnansweredQuestionsAction());
       const unansweredQuestions = await getUnansweredQuestions();
-      setQuestions(unansweredQuestions);
-      setQuestionsLoading(false);
+      dispatch(gotUnansweredQuestionsAction(unansweredQuestions));
     };
     doGetUnansweredQuestions();
   }, []);

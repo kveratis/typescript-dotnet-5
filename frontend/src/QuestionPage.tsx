@@ -3,6 +3,8 @@ import { css } from '@emotion/react';
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { useSelector, useDispatch } from 'react-redux';
+import { AppState, gettingQuestionAction, gotQuestionAction } from './Store';
 import {
   gray3,
   gray6,
@@ -17,22 +19,24 @@ import {
 } from './Styles';
 import AnswerList from './AnswerList';
 import Page from './Page';
-import { QuestionData, getQuestion, postAnswer } from './QuestionsData';
+import { getQuestion, postAnswer } from './QuestionsData';
 
 type FormData = {
   content: string;
 };
 
 const QuestionPage = () => {
-  const [question, setQuestion] = useState<QuestionData | null>(null);
+  const dispatch = useDispatch();
+  const question = useSelector((state: AppState) => state.questions.viewing);
   const [successfullySubmitted, setSuccessfullySubmitted] = useState(false);
 
   const { questionId } = useParams();
 
   useEffect(() => {
     const doGetQuestion = async (questionId: number) => {
+      dispatch(gettingQuestionAction());
       const foundQuestion = await getQuestion(questionId);
-      setQuestion(foundQuestion);
+      dispatch(gotQuestionAction(foundQuestion));
     };
     if (questionId) {
       doGetQuestion(Number(questionId));
