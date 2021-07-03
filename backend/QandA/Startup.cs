@@ -42,6 +42,8 @@ namespace QandA
                 upgrader.PerformUpgrade();
             }
 
+            services.AddMemoryCache();
+            services.AddSingleton<IQuestionCache, InMemoryQuestionCache>();
             services.AddScoped<IDataRepository, DataRepository>();
 
             services.AddControllers();

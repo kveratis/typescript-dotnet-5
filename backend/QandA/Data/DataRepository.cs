@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using Microsoft.Data.SqlClient;
 using Dapper;
 using QandA.Data.Models;
+using System.Linq;
+using static Dapper.SqlMapper;
+using System.Threading.Tasks;
 
 namespace QandA.Data
 {
@@ -34,11 +37,17 @@ namespace QandA.Data
         {
             using var connection = new SqlConnection(_connectionString);
             connection.Open();
-            var question = connection.QueryFirstOrDefault<QuestionGetSingleResponse>(@"EXEC dbo.Question_GetSingle @QuestionId = @QuestionId", new { QuestionId = questionId });
+
+            using var results = connection.QueryMultiple(
+                @"EXEC dbo.Question_GetSingle @QuestionId = @QuestionId;
+                EXEC dbo.Answer_Get_ByQuestionId @QuestionId = @QuestionId", new { QuestionId = questionId }
+            );
+
+            var question = results.Read<QuestionGetSingleResponse>().FirstOrDefault();
 
             if(question != null)
             {
-                question.Answers = connection.Query<AnswerGetResponse>(@"EXEC dbo.Answer_Get_ByQuestionId @QuestionId = @QuestionId", new { QuestionId = questionId });
+                question.Answers = results.Read<AnswerGetResponse>().ToList();
             }
             
             return question;
@@ -51,6 +60,32 @@ namespace QandA.Data
             return connection.Query<QuestionGetManyResponse>(@"EXEC dbo.Question_GetMany");
         }
 
+        public IEnumerable<QuestionGetManyResponse> GetQuestionsWithAnswers()
+        {
+            using var connection = new SqlConnection(_connectionString);
+            connection.Open();
+            var questionDictionary = new Dictionary<int, QuestionGetManyResponse>();
+            return connection.Query<QuestionGetManyResponse, AnswerGetResponse, QuestionGetManyResponse>(
+                @"EXEC dbo.Question_GetMany_WithAnswers",
+                map: (q, a) =>
+                {
+                    // This code addresses the N+1 issue of Questions + Answers
+                    if (!questionDictionary.TryGetValue(q.QuestionId, out QuestionGetManyResponse question))
+                    {
+                        question = q;
+                        question.Answers = new List<AnswerGetResponse>();
+                        questionDictionary.Add(question.QuestionId, question);
+                    }
+
+                    question.Answers.Add(a);
+                    return question;
+                },
+                splitOn: "QuestionId"   // This says everything before QuestionId goes into the QuestionGetManyResponse model and everything afterward including QuestionId goes into the AnswerGetResponse model
+                )
+                .Distinct() // Remove duplicate questions
+                .ToList();
+        }
+
         public IEnumerable<QuestionGetManyResponse> GetQuestionsBySearch(string search)
         {
             using var connection = new SqlConnection(_connectionString);
@@ -58,11 +93,29 @@ namespace QandA.Data
             return connection.Query<QuestionGetManyResponse>(@"EXEC dbo.Question_GetMany_BySearch @Search = @Search", new { Search = search });
         }
 
+        public IEnumerable<QuestionGetManyResponse> GetQuestionsBySearchWithPaging(string search, int pageNumber, int pageSize)
+        {
+            using var connection = new SqlConnection(_connectionString);
+            connection.Open();
+            return connection.Query<QuestionGetManyResponse>(
+                @"EXEC dbo.Question_GetMany_BySearch_WithPaging
+                  @Search = @Search,
+                  @PageNumber=@PageNumber, 
+                  @PageSize=@PageSize", new { Search = search, PageNumber = pageNumber, PageSize = pageSize });
+        }
+
         public IEnumerable<QuestionGetManyResponse> GetUnansweredQuestions()
         {
             using var connection = new SqlConnection(_connectionString);
             connection.Open();
             return connection.Query<QuestionGetManyResponse>(@"EXEC dbo.Question_GetUnanswered");
+        }
+
+        public async Task<IEnumerable<QuestionGetManyResponse>> GetUnansweredQuestionsAsync()
+        {
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
+            return await connection.QueryAsync<QuestionGetManyResponse>(@"EXEC dbo.Question_GetUnanswered");
         }
 
         public AnswerGetResponse PostAnswer(AnswerPostFullRequest answer)
