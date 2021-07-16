@@ -6,6 +6,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using QandA.Data;
 using QandA.Data.Models;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using Microsoft.Extensions.Configuration;
+using System.Net.Http;
+using System.Text.Json;
 
 namespace QandA.Controllers
 {
@@ -15,11 +20,15 @@ namespace QandA.Controllers
     {
         private readonly IDataRepository _dataRepository;
         private readonly IQuestionCache _cache;
+        private readonly IHttpClientFactory _clientFactory;
+        private readonly string _oktaUserInfo;
 
-        public QuestionsController(IDataRepository dataRepository, IQuestionCache questionCache)
+        public QuestionsController(IDataRepository dataRepository, IQuestionCache questionCache, IHttpClientFactory clientFactory, IConfiguration configuration)
         {
             _dataRepository = dataRepository;
             _cache = questionCache;
+            _clientFactory = clientFactory;
+            _oktaUserInfo = $"{configuration["Okta:Profile"]}";
         }
 
         [HttpGet]
@@ -39,9 +48,9 @@ namespace QandA.Controllers
         }
 
         [HttpGet("unanswered")]
-        public async Task<IEnumerable<QuestionGetManyResponse>> GetUnansweredQuestions()
+        public async Task<IEnumerable<QuestionGetManyResponse>> GetUnansweredQuestions(int page = 1, int pageSize = 20)
         {
-            return await _dataRepository.GetUnansweredQuestionsAsync();
+            return await _dataRepository.GetUnansweredQuestionsAsync(page, pageSize);
         }
 
         [HttpGet("{questionId}")]
@@ -64,24 +73,26 @@ namespace QandA.Controllers
             return question;
         }
 
+        [Authorize]
         [HttpPost]
-        public ActionResult<QuestionGetSingleResponse> PostQuestion(QuestionPostRequest questionPostRequest)
+        public async Task<ActionResult<QuestionGetSingleResponse>> PostQuestion(QuestionPostRequest questionPostRequest)
         {
-            var savedQuestion = _dataRepository.PostQuestion(new QuestionPostFullRequest {
+            var savedQuestion = await _dataRepository.PostQuestionAsync(new QuestionPostFullRequest {
                 Title = questionPostRequest.Title,
                 Content = questionPostRequest.Content,
-                UserId = "1",
-                UserName = "bob.test@test.com",
+                UserId = User.FindFirst(ClaimTypes.NameIdentifier).Value,
+                UserName = await GetUserName(),
                 Created = DateTime.UtcNow
             });
 
             return CreatedAtAction(nameof(GetQuestion), new { questionId = savedQuestion.QuestionId }, savedQuestion);
         }
 
+        [Authorize(Policy = "MustBeQuestionAuthor")]
         [HttpPut("{questionId}")]
-        public ActionResult<QuestionGetSingleResponse> PutQuestion(int questionId, QuestionPutRequest questionPutRequest)
+        public async Task<ActionResult<QuestionGetSingleResponse>> PutQuestion(int questionId, QuestionPutRequest questionPutRequest)
         {
-            var question = _dataRepository.GetQuestion(questionId);
+            var question = await _dataRepository.GetQuestionAsync(questionId);
 
             if(question == null)
             {
@@ -91,31 +102,33 @@ namespace QandA.Controllers
             questionPutRequest.Title = string.IsNullOrWhiteSpace(questionPutRequest.Title) ? question.Title : questionPutRequest.Title;
             questionPutRequest.Content = string.IsNullOrWhiteSpace(questionPutRequest.Content) ? question.Content : questionPutRequest.Content;
 
-            var savedQuestion = _dataRepository.PutQuestion(questionId, questionPutRequest);
+            var savedQuestion = await _dataRepository.PutQuestionAsync(questionId, questionPutRequest);
 
             _cache.Remove(savedQuestion.QuestionId);
             
             return savedQuestion;
         }
 
+        [Authorize(Policy = "MustBeQuestionAuthor")]
         [HttpDelete("{questionId}")]
-        public ActionResult DeleteQuestion(int questionId)
+        public async Task<ActionResult> DeleteQuestion(int questionId)
         {
-            var question = _dataRepository.GetQuestion(questionId);
+            var question = await _dataRepository.GetQuestionAsync(questionId);
 
             if(question == null)
             {
                 return NotFound();
             }
 
-            _dataRepository.DeleteQuestion(questionId);
+            await _dataRepository.DeleteQuestionAsync(questionId);
             _cache.Remove(questionId);
 
             return NoContent();
         }
 
+        [Authorize]
         [HttpPost("answer")]
-        public ActionResult<AnswerGetResponse> PostAnswer(AnswerPostRequest answerPostRequest)
+        public async Task<ActionResult<AnswerGetResponse>> PostAnswer(AnswerPostRequest answerPostRequest)
         {
             var questionExists = _dataRepository.QuestionExists(answerPostRequest.QuestionId.Value);
 
@@ -127,14 +140,36 @@ namespace QandA.Controllers
             var savedAnswer = _dataRepository.PostAnswer(new AnswerPostFullRequest {
                 QuestionId = answerPostRequest.QuestionId.Value,
                 Content = answerPostRequest.Content,
-                UserId = "1",
-                UserName = "bob.test@test.com",
+                UserId = User.FindFirst(ClaimTypes.NameIdentifier).Value,
+                UserName = await GetUserName(),
                 Created = DateTime.UtcNow
             });
 
             _cache.Remove(answerPostRequest.QuestionId.Value);
 
             return savedAnswer;
+        }
+
+        private async Task<string> GetUserName()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, _oktaUserInfo);
+            request.Headers.Add("Authorization", Request.Headers["Authorization"].First());
+
+            var client = _clientFactory.CreateClient();
+            var response = await client.SendAsync(request);
+
+            if(response.IsSuccessStatusCode)
+            {
+                var jsonContent = await response.Content.ReadAsStringAsync();
+                var user = JsonSerializer.Deserialize<User>(jsonContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                return user.Name;
+            }
+
+            return string.Empty;
         }
     }
 }

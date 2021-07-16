@@ -3,8 +3,6 @@ import { css } from '@emotion/react';
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { useSelector, useDispatch } from 'react-redux';
-import { AppState, gettingQuestionAction, gotQuestionAction } from './Store';
 import {
   gray3,
   gray6,
@@ -19,28 +17,35 @@ import {
 } from './Styles';
 import AnswerList from './AnswerList';
 import Page from './Page';
-import { getQuestion, postAnswer } from './QuestionsData';
+import { QuestionData, getQuestion, postAnswer } from './QuestionsData';
+import { useAuth } from './components/auth/Auth';
 
 type FormData = {
   content: string;
 };
 
 const QuestionPage = () => {
-  const dispatch = useDispatch();
-  const question = useSelector((state: AppState) => state.questions.viewing);
-  const [successfullySubmitted, setSuccessfullySubmitted] = useState(false);
+  const [successfullySubmitted, setSuccessfullySubmitted] =
+    React.useState(false);
 
+  const [question, setQuestion] = useState<QuestionData | null>(null);
   const { questionId } = useParams();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
+    let cancelled = false;
     const doGetQuestion = async (questionId: number) => {
-      dispatch(gettingQuestionAction());
       const foundQuestion = await getQuestion(questionId);
-      dispatch(gotQuestionAction(foundQuestion));
+      if (!cancelled) {
+        setQuestion(foundQuestion);
+      }
     };
     if (questionId) {
       doGetQuestion(Number(questionId));
     }
+    return () => {
+      cancelled = true;
+    };
   }, [questionId]);
 
   const {
@@ -102,42 +107,47 @@ const QuestionPage = () => {
               } on ${question.created.toLocaleDateString()} ${question.created.toLocaleTimeString()}`}
             </div>
             <AnswerList data={question.answers} />
-            <form
-              onSubmit={handleSubmit(submitForm)}
-              css={css`
-                margin-top: 20px;
-              `}
-            >
-              <Fieldset
-                disabled={formState.isSubmitting || successfullySubmitted}
+            {isAuthenticated && (
+              <form
+                onSubmit={handleSubmit(submitForm)}
+                css={css`
+                  margin-top: 20px;
+                `}
               >
-                <FieldContainer>
-                  <FieldLabel htmlFor="content">Your Answer</FieldLabel>
-                  <FieldTextArea
-                    id="content"
-                    {...register('content', { required: true, minLength: 50 })}
-                  />
-                  {errors.content && errors.content.type === 'required' && (
-                    <FieldError>You must enter the answer</FieldError>
+                <Fieldset
+                  disabled={formState.isSubmitting || successfullySubmitted}
+                >
+                  <FieldContainer>
+                    <FieldLabel htmlFor="content">Your Answer</FieldLabel>
+                    <FieldTextArea
+                      id="content"
+                      {...register('content', {
+                        required: true,
+                        minLength: 50,
+                      })}
+                    />
+                    {errors.content && errors.content.type === 'required' && (
+                      <FieldError>You must enter the answer</FieldError>
+                    )}
+                    {errors.content && errors.content.type === 'minLength' && (
+                      <FieldError>
+                        The answer must be at least 50 characters
+                      </FieldError>
+                    )}
+                  </FieldContainer>
+                  <FormButtonContainer>
+                    <PrimaryButton type="submit">
+                      Submit Your Answer
+                    </PrimaryButton>
+                  </FormButtonContainer>
+                  {successfullySubmitted && (
+                    <SubmissionSuccess>
+                      Your answer was successfully submitted
+                    </SubmissionSuccess>
                   )}
-                  {errors.content && errors.content.type === 'minLength' && (
-                    <FieldError>
-                      The answer must be at least 50 characters
-                    </FieldError>
-                  )}
-                </FieldContainer>
-                <FormButtonContainer>
-                  <PrimaryButton type="submit">
-                    Submit Your Answer
-                  </PrimaryButton>
-                </FormButtonContainer>
-                {successfullySubmitted && (
-                  <SubmissionSuccess>
-                    Your answer was successfully submitted
-                  </SubmissionSuccess>
-                )}
-              </Fieldset>
-            </form>
+                </Fieldset>
+              </form>
+            )}
           </>
         )}
       </div>

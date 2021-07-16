@@ -9,7 +9,7 @@ namespace QandA.Data
 {
     public class InMemoryQuestionCache : IQuestionCache
     {
-        private MemoryCache _cache;
+        private readonly MemoryCache _cache;
 
         public InMemoryQuestionCache()
         {
@@ -18,8 +18,7 @@ namespace QandA.Data
 
         public QuestionGetSingleResponse Get(int questionId)
         {
-            QuestionGetSingleResponse question;
-            _cache.TryGetValue(GetCacheKey(questionId), out question);
+            _cache.TryGetValue(GetCacheKey(questionId), out QuestionGetSingleResponse question);
             return question;
         }
 
@@ -34,6 +33,6 @@ namespace QandA.Data
             _cache.Set(GetCacheKey(question.QuestionId), question, cacheEntryOptions);
         }
 
-        private string GetCacheKey(int questionId) => $"Question-{questionId}";
+        private static string GetCacheKey(int questionId) => $"Question-{questionId}";
     }
 }

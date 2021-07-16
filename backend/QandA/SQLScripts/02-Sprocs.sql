@@ -209,6 +209,26 @@ BEGIN
 END
 GO
 
+CREATE PROC dbo.Question_GetUnanswered_WithPaging
+(
+	@PageNumber int,
+	@PageSize int
+)
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	SELECT QuestionId, Title, Content, UserId, UserName, Created
+	FROM dbo.Question q
+	WHERE NOT EXISTS (SELECT *
+	FROM dbo.Answer a
+	WHERE a.QuestionId = q.QuestionId)
+	ORDER BY QuestionId
+	OFFSET @PageSize * (@PageNumber - 1) ROWS
+    FETCH NEXT @PageSize ROWS ONLY
+END
+GO
+
 CREATE PROC dbo.Question_Post
 	(
 	@Title nvarchar(100),

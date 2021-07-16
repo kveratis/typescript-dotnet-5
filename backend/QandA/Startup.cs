@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
+using QandA.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,6 +17,9 @@ using System.Threading.Tasks;
 using DbUp;
 using System.Reflection;
 using QandA.Data;
+using QandA.Data.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Net.Http;
 
 namespace QandA
 {
@@ -42,9 +48,31 @@ namespace QandA
                 upgrader.PerformUpgrade();
             }
 
+            services.AddHttpClient();
+            services.AddAuthorization(options => {
+                options.AddPolicy("MustBeQuestionAuthor", policy => policy.Requirements.Add(new MustBeQuestionAuthorRequirement()));
+            });
+            services.AddScoped<IAuthorizationHandler, MustBeQuestionAuthorHandler>();
+            services.AddHttpContextAccessor();  // NOTE: Convenenice method for AddSingleton<IHttpContextAccessor,HttpContextAccessor>
             services.AddMemoryCache();
             services.AddSingleton<IQuestionCache, InMemoryQuestionCache>();
             services.AddScoped<IDataRepository, DataRepository>();
+
+            services.Configure<OktaSettings>(Configuration.GetSection("Okta"));
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            }).AddJwtBearer(options => {
+                options.Authority = Configuration["Okta:Authority"];
+                options.Audience = Configuration["Okta:Audience"];
+            });
+
+            services.AddCors(options =>
+                options.AddPolicy("CorsPolicy", builder => builder
+                    .AllowAnyMethod()
+                    .AllowAnyHeader()
+                    .WithOrigins(Configuration["Frontend"])));
 
             services.AddControllers();
             services.AddSwaggerGen(c =>
@@ -68,7 +96,8 @@ namespace QandA
             }
 
             app.UseRouting();
-
+            app.UseCors("CorsPolicy");
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>

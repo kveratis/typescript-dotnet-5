@@ -5,6 +5,23 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { fontFamily, fontSize, gray1, gray2, gray5 } from './Styles';
 import { UserIcon } from './Icons';
+import { useAuth } from './components/auth/Auth';
+
+const buttonStyle = css`
+  font-family: ${fontFamily};
+  font-size: ${fontSize};
+  padding: 5px 10px;
+  background-color: transparent;
+  color: ${gray2};
+  text-decoration: none;
+  cursor: pointer;
+  :focus {
+    outline-color: ${gray5};
+  }
+  span {
+    margin-left: 7px;
+  }
+`;
 
 type FormData = {
   search: string;
@@ -19,6 +36,8 @@ const Header = () => {
   const submitForm = ({ search }: FormData) => {
     navigate(`search?criteria=${search}`);
   };
+
+  const { isAuthenticated, user, loading } = useAuth();
 
   return (
     <div
@@ -71,27 +90,23 @@ const Header = () => {
           `}
         />
       </form>
-      <Link
-        to="signin"
-        css={css`
-          font-family: ${fontFamily};
-          font-size: ${fontSize};
-          padding: 5px 10px;
-          background-color: transparent;
-          color: ${gray2};
-          text-decoration: none;
-          cursor: pointer;
-          :focus {
-            outline-color: ${gray5};
-          }
-          span {
-            margin-left: 7px;
-          }
-        `}
-      >
-        <UserIcon />
-        <span>Sign In</span>
-      </Link>
+      <div>
+        {!loading &&
+          (isAuthenticated ? (
+            <div>
+              <span>{user!.name}</span>
+              <Link to="signout" css={buttonStyle}>
+                <UserIcon />
+                <span>Sign Out</span>
+              </Link>
+            </div>
+          ) : (
+            <Link to="signin" css={buttonStyle}>
+              <UserIcon />
+              <span>Sign In</span>
+            </Link>
+          ))}
+      </div>
     </div>
   );
 };
