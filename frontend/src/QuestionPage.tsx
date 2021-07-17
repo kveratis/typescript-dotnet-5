@@ -34,8 +34,8 @@ const QuestionPage = () => {
 
   useEffect(() => {
     let cancelled = false;
-    const doGetQuestion = async (questionId: number) => {
-      const foundQuestion = await getQuestion(questionId);
+    const doGetQuestion = async (questionToGetId: number) => {
+      const foundQuestion = await getQuestion(questionToGetId);
       if (!cancelled) {
         setQuestion(foundQuestion);
       }
